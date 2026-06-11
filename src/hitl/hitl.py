@@ -65,32 +65,39 @@ class ConfidenceRouter:
         Returns:
             RoutingDecision with routing action and metadata
         """
-        # TODO 12: Implement routing logic
-        #
-        # 1. Check if action_type is in HIGH_RISK_ACTIONS
-        #    -> If yes: always escalate (action="escalate", priority="high",
-        #       requires_human=True, reason="High-risk action: {action_type}")
-        #
-        # 2. Check confidence thresholds:
-        #    - confidence >= 0.9:
-        #      action="auto_send", priority="low",
-        #      requires_human=False, reason="High confidence"
-        #
-        #    - 0.7 <= confidence < 0.9:
-        #      action="queue_review", priority="normal",
-        #      requires_human=True, reason="Medium confidence — needs review"
-        #
-        #    - confidence < 0.7:
-        #      action="escalate", priority="high",
-        #      requires_human=True, reason="Low confidence — escalating"
+        if action_type in HIGH_RISK_ACTIONS:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason=f"High-risk action: {action_type}",
+                priority="high",
+                requires_human=True,
+            )
 
-        return RoutingDecision(
-            action="auto_send",
-            confidence=confidence,
-            reason="TODO: implement routing logic",
-            priority="low",
-            requires_human=False,
-        )  # TODO: Replace with implementation
+        if confidence >= self.HIGH_THRESHOLD:
+            return RoutingDecision(
+                action="auto_send",
+                confidence=confidence,
+                reason="High confidence",
+                priority="low",
+                requires_human=False,
+            )
+        elif confidence >= self.MEDIUM_THRESHOLD:
+            return RoutingDecision(
+                action="queue_review",
+                confidence=confidence,
+                reason="Medium confidence — needs review",
+                priority="normal",
+                requires_human=True,
+            )
+        else:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason="Low confidence — escalating",
+                priority="high",
+                requires_human=True,
+            )
 
 
 # ============================================================
@@ -109,27 +116,63 @@ class ConfidenceRouter:
 hitl_decision_points = [
     {
         "id": 1,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Large Financial Transaction Approval",
+        "trigger": (
+            "User requests a money transfer or withdrawal above 50,000,000 VND, "
+            "or the action_type is 'transfer_money' / 'close_account'. "
+            "Triggered regardless of model confidence."
+        ),
+        "hitl_model": "human-in-the-loop",
+        "context_needed": (
+            "Full transaction details (amount, source account, destination account), "
+            "user identity verification status, account history for the past 30 days, "
+            "any recent suspicious activity flags."
+        ),
+        "example": (
+            "Customer asks the agent to transfer 200,000,000 VND to an external account. "
+            "The agent queues the request and a human bank officer must approve or reject "
+            "the transaction before it is executed."
+        ),
     },
     {
         "id": 2,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Low-Confidence or Ambiguous Response Review",
+        "trigger": (
+            "The ConfidenceRouter assigns a score below 0.7, or the LLM-as-Judge returns "
+            "UNSAFE / RELEVANCE < 3. The agent's response may be inaccurate or misleading."
+        ),
+        "hitl_model": "human-on-the-loop",
+        "context_needed": (
+            "The user's original question, the agent's drafted response, "
+            "the judge scores (safety, relevance, accuracy, tone), "
+            "and relevant FAQ/policy documents for fact-checking."
+        ),
+        "example": (
+            "Customer asks about a new government loan subsidy scheme. "
+            "The agent produces a response with accuracy score 2/5. "
+            "A compliance officer reviews the draft before it is sent and corrects "
+            "any outdated interest rate figures."
+        ),
     },
     {
         "id": 3,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Repeated Security Alert Escalation",
+        "trigger": (
+            "A single user session triggers 3 or more injection/blocked alerts within "
+            "10 minutes, indicating a possible automated attack or persistent bad actor."
+        ),
+        "hitl_model": "human-as-tiebreaker",
+        "context_needed": (
+            "Full session transcript with timestamps, list of blocked prompts, "
+            "user account details and IP address, and block-rate anomaly metrics "
+            "from the monitoring dashboard."
+        ),
+        "example": (
+            "An automated script sends 5 prompt injection attempts in 3 minutes targeting "
+            "the agent. The monitoring alert fires. A security analyst reviews the session "
+            "and decides whether to permanently block the user account or flag it for "
+            "further investigation."
+        ),
     },
 ]
 
